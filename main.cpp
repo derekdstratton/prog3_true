@@ -10,10 +10,10 @@ using namespace cv;
 using namespace std;
 
 // http://www.cplusplus.com/forum/windows/189681/
+//
 std::vector<std::string> get_filenames(filesystem::path path)
 {
     std::vector<std::string> filenames;
-
     // http://en.cppreference.com/w/cpp/experimental/fs/directory_iterator
     const filesystem::directory_iterator end{};
 
@@ -30,91 +30,122 @@ std::vector<std::string> get_filenames(filesystem::path path)
 int main()
 {
     vector<Mat> faces;
-
-    namedWindow("Display Image", WINDOW_AUTOSIZE);
-    for (auto name : get_filenames("Faces_FA_FB/fa_H"))
+    /// Reads in all hd faces and stores them unflattened in a vector
+    for (string name : get_filenames("Faces_FA_FB/fa_H"))
     {
-        auto im = imread(name, IMREAD_GRAYSCALE);
-        Mat divided;
-//        subtract(im, 255, divided, Mat(),CV_64FC1);
-//        im /= 255;
+        Mat im = imread(name,IMREAD_GRAYSCALE);
+        // normalize im to contain values between 0 - 1
+        normalize(im, im, 0.0, 1.0, NORM_MINMAX, CV_64FC1);
         faces.push_back(im);
     }
+    cout << "CP1" << endl;
 
-    //mean
-//    imshow("Display Image", faces[0]);
-    Mat mean = Mat::zeros(Size(faces[0].cols, faces[0].rows),CV_64FC1);
-//    cout << mean.type() << endl;
-    for (auto face : faces)
+    /// Calculate the mean face of the dataset
+    Mat mean = Mat::zeros(Size(faces[0].cols, faces[0].rows), CV_64FC1);
+    for (Mat face : faces)
     {
+        //store running total of face values
         mean += face;
     }
-    mean /= faces.size();
-    mean /= 255; //https://stackoverflow.com/questions/9588719/opencv-double-mat-shows-up-as-all-white
-//    cout << mean << endl;
-//    namedWindow("Display Image", WINDOW_FULLSCREEN);
-//    imshow("Display Image", mean);
-//    waitKey(0);
+    // divide by total number of faces to get mean
+    mean /= double(faces.size());
 
-    //centered faces
-    vector<Mat> centered_faces;
-    for (auto face : faces)
-    {
-//        face /= 255;
-        Mat centered;
-        subtract(face, mean, centered, Mat(),CV_64FC1);
-        centered /= 255;
-        centered_faces.push_back(centered);
-    }
 
-    cout << faces[0].rows << " " << faces[0].cols << endl;
+    //imshow("windowname", mean);
+    //waitKey(0);
 
-    //flattened matrix
-    Mat flattened = Mat::zeros(Size(faces.size(), faces[0].cols * faces[0].rows), CV_64FC1);
-    cout << flattened.rows << " " << flattened.cols << endl;
-    cout << faces[0].type() << endl;
-//    cout << (double) faces[0].at<uchar>(0,0) << endl;
-//    flattened.at<double>(0, 0) = (double) faces[0].at<uchar>(0,0);
+    cout << "CP2" << endl;
+
+    /// Subtract mean from every face to normalize them
     for (int i = 0; i < faces.size(); i++)
     {
-        auto face = centered_faces[i];
-//        auto face = faces[i]; //faces is uchar, centered_faces is double
+        faces.at(i) -= mean;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Create a matrix of flattened faces; call this matrix A
+    // faces.size() is the number of samples
+    // faces[0].cols * facces[0].rows gets the size of the flattened image vector
+    // Size() opencv datatype takes in (width,height) of matrix
+    ////////////////////////////////////////////////////////////////////////////////
+
+    Mat A = Mat::zeros(Size(faces.size(), faces[0].cols * faces[0].rows), CV_64FC1);
+    //cout << "A rows: " << A.rows << " A cols:" << A.cols << endl;
+
+    // for every face
+    for (int i = 0; i < faces.size(); i++)
+    {
+        Mat face = faces[i];
         face = face.t();
+
+        // for every pixel
         for (int j = 0; j < face.cols; j++)
         {
             for (int k = 0; k < face.rows; k++)
             {
-//                cout << j << ", " << k << endl;
-                flattened.at<double>(k + j * face.rows, i) = (double) face.at<double>(k, j);
+                // Mat.at() takes in (row,col) indexing
+                A.at<double>(k + j * face.rows, i) = (double)face.at<double>(k, j);
             }
         }
     }
-//    cout << faces[0] << endl;
-//    cout << "_________________" << endl;
 
-    auto t = flattened;
-    t = t.t();
+    // Sanity check to make sure faces weres flattened/stored in A correctly
+    // Unflatten and display the first face at column 0
+    /*
+    Mat testImg = Mat(faces[0].size(), CV_64FC1);
+    for (int i = 0; i < faces[0].rows; i++)
+    {
+        for (int j = 0; j < faces[0].cols; j++)
+        {
+            testImg.at<double>(i, j) = A.at<double>(j + i * faces[0].cols, 0);
+        }
+    }
+    imshow("Display window", testImg+mean);
+    waitKey(0);
+    */
 
-    cout << t.at<double>(0,0) << " AAAAAAAAAAA " << flattened.at<double>(0,0) << endl;
+    // .t() doesnt transpose the object that calls it, returns a transposed matrix
+    // https://docs.opencv.org/3.4/d3/d63/classcv_1_1Mat.html#aaa428c60ccb6d8ea5de18f63dfac8e11
+    Mat t = A.t();
 
-    Mat cov = flattened * t;
-    cov /= cov.rows;
 
-    cout << cov.rows << " " << cov.cols << endl;
-    cout << cov.at<double>(0,2) << " " << cov.at<double>(2,0) << endl;
+    Mat cov = t*A;
 
-//    for (int i = 0; i < flattened.rows; i++)
-//    {
-//        cout << cov.at<double>(i, 0) << " ";
-//    }
 
-    //compute eigenvals and eigenvecs
-    //todo: dont cheat this
-    PCA pca(flattened, Mat(), PCA::DATA_AS_ROW, 10);
-    cout << pca.eigenvalues;
+    // Size of covarianace matrix should be MxM where M is number of training samples
+    cout << "Cov rows:" <<cov.rows << " Cov Cols:" << cov.cols << endl;
 
-//    cv::Mat E, V;
-//    cv::eigen(cov,E,V);
-//    cout << E.rows << " " << E.cols << endl;
+    // Compute eigen values & eigen vectors of covariance matrix and stores in descending order
+    // https://docs.opencv.org/2.4/modules/core/doc/operations_on_arrays.html?highlight=eigen#bool%20eigen%28InputArray%20src,%20OutputArray%20eigenvalues,%20OutputArray%20eigenvectors,%20int%20lowindex,int%20highindex%29
+    Mat eigenValues, eigenVectors;
+    eigen(cov, eigenValues, eigenVectors);
+    cout << "Reconstructing Eigen Faces.." << endl;
+    Mat eigenFaces = A * eigenVectors;
+
+
+    // Sanity check to make sure eigenFaces arent garbage
+    // Unflatten and display the first eigenFace at column 0
+    /*
+    Mat testImg = Mat(faces[0].size(), CV_64FC1);
+    for (int i = 0; i < faces[0].rows; i++)
+    {
+        for (int j = 0; j < faces[0].cols; j++)
+        {
+            testImg.at<double>(i, j) = eigenFaces.at<double>(j + i * faces[0].cols, 0);
+        }
+    }
+    imshow("Display window", testImg + mean);
+    waitKey(0);
+    */
+
+    // Convert data back to scale of 0 - 255 so it can be read by an image editor like GIMP
+    cout << "Normalizing mean back to 0 - 255" << endl;
+    normalize(mean, mean, 0, 255, NORM_MINMAX, CV_8UC1);
+    cout << "Normalizing eigenfaces 0-255" << endl;
+    normalize(eigenFaces, eigenFaces, 0, 255, NORM_MINMAX, CV_8UC1);
+    // store as PGMs
+    imwrite("mean.pgm", mean);
+    imwrite("eigenfaces.pgm", eigenFaces);
+
     return 0;
 }

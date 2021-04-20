@@ -15,9 +15,15 @@ include_directories( ${OpenCV_INCLUDE_DIRS} )
 
 add_executable(prog3 main.cpp)
 
+add_executable(prog3_exp experiments.cpp)
+
 target_link_libraries( prog3 ${OpenCV_LIBS} )
 
 target_link_libraries( prog3 ${CMAKE_CURRENT_SOURCE_DIR}/opencv/build/x64/vc15/lib/opencv_world452d.lib)
+
+target_link_libraries( prog3_exp ${OpenCV_LIBS} )
+
+target_link_libraries( prog3_exp ${CMAKE_CURRENT_SOURCE_DIR}/opencv/build/x64/vc15/lib/opencv_world452d.lib)
 
 message("libs")
 message(${OpenCV_LIBS})
