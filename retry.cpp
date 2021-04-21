@@ -102,7 +102,8 @@ int main()
 
         //num_features x num_samples
         //this multiplication also takes a hot minute
-        Eigen::MatrixXd transformed_eigens = original_data * reversed_eigenvectors;
+        //todo: I'm not sure if it's supposed to be original_data or centered_data
+        Eigen::MatrixXd transformed_eigens = centered_data * reversed_eigenvectors;
 
         cout << "transformed eigenfaces dims" << transformed_eigens.rows() << " " << transformed_eigens.cols() << endl;
         //normalize to unit length
@@ -113,7 +114,8 @@ int main()
 
         //trying it on image1
         //1 x num_samples
-        Eigen::MatrixXd y = original_data.col(0).transpose() * transformed_eigens;
+        //todo: original or centered
+        Eigen::MatrixXd y = centered_data.col(0).transpose() * transformed_eigens;
         cout << "y dims" << y.rows() << " " << y.cols() << endl;
 
         cout << y << endl;
