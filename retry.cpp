@@ -203,6 +203,8 @@ int main()
             x_hat += y(0, k) * transformed_eigens.col(k);
         }
 
+        cout << "ERROR: " << endl;
+
         view_vector_as_image(x_hat + x_bar, num_rows, num_cols);
     }
 
