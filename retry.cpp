@@ -90,7 +90,6 @@ int main()
 
         //Sample Mean
         //step 1
-        Eigen::VectorXd sample_mean;
         Eigen::VectorXd x_bar = Eigen::VectorXd::Zero(num_features);
         for (int i = 0; i < num_samples; i++)
         {
@@ -192,20 +191,34 @@ int main()
             centered_data.col(i) = original_data.col(i) - x_bar;
         }
 
-        Eigen::MatrixXd y = centered_data.col(1).transpose() * transformed_eigens;
+        int sample_to_reconstruct = 1;
+        int num_eigenvectors_to_use = transformed_eigens.cols();
+
+        Eigen::MatrixXd y = centered_data.col(sample_to_reconstruct).transpose() * transformed_eigens;
         cout << "y dims" << y.rows() << " " << y.cols() << endl;
 
-        cout << y << endl;
+//        cout << y << endl;
 
         Eigen::VectorXd x_hat = Eigen::VectorXd::Zero(num_features);
-        for (int k = 0; k < 1000; k++)
+        for (int k = 0; k < num_eigenvectors_to_use; k++)
         {
             x_hat += y(0, k) * transformed_eigens.col(k);
         }
 
-        cout << "ERROR: " << endl;
+        //make sure to divide by 255 so they are between 0 and 1
+        Eigen::VectorXd diff = (original_data.col(sample_to_reconstruct) - (x_hat + x_bar)) / 255.;
+
+//        cout << original_data.col(sample_to_reconstruct).normalized() << endl;
+
+//        cout << diff << endl;
+
+        cout << "ERROR: " << diff.norm() << endl;
 
         view_vector_as_image(x_hat + x_bar, num_rows, num_cols);
+    }
+    if (D)
+    {
+
     }
 
     return 0;
