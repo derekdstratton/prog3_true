@@ -16,6 +16,25 @@ void view_vector_as_image(Eigen::VectorXd image_vec, int rows, int cols)
     cv::waitKey(0);
 }
 
+void write_eigen_matrix_to_file(Eigen::MatrixXd mat, string out_path, string name)
+{
+    cv::Mat cvMat;
+    cv::eigen2cv(mat, cvMat);
+    cv::FileStorage fs(out_path, cv::FileStorage::WRITE);
+    fs << name << cvMat;
+    fs.release();
+}
+
+Eigen::MatrixXd read_matrix_into_eigen(string in_path, string name)
+{
+    cv::FileStorage fs(in_path, cv::FileStorage::READ);
+    Eigen::MatrixXd eigenMat;
+    cv::Mat cvMat;
+    fs[name] >> cvMat;
+    cv::cv2eigen(cvMat, eigenMat);
+    return eigenMat;
+}
+
 std::vector<std::string> get_filenames(filesystem::path path)
 {
     std::vector<std::string> filenames;
@@ -46,6 +65,7 @@ int main()
         std::cout << "Flattened vector size " << vec.size() << std::endl;
         view_vector_as_image(vec, mat.rows(), mat.cols());
     }
+    //compute eigens
     if (B)
     {
         auto file_name_list = get_filenames("Faces_FA_FB/fa_H");
@@ -88,6 +108,7 @@ int main()
 //        view_vector_as_image(centered_data.col(0), num_rows, num_cols);
 
         //step 3 (MxM)
+        //cov matrix: check symmetric
         auto A_transpose_A = centered_data.transpose() * centered_data;
         cout << "A Transpose A matrix: " << A_transpose_A.rows() << " " << A_transpose_A.cols() << endl;
 
@@ -102,9 +123,7 @@ int main()
 
         //num_features x num_samples
         //this multiplication also takes a hot minute
-        //todo: I'm not sure if it's supposed to be original_data or centered_data
         Eigen::MatrixXd transformed_eigens = centered_data * reversed_eigenvectors;
-
         cout << "transformed eigenfaces dims" << transformed_eigens.rows() << " " << transformed_eigens.cols() << endl;
         //normalize to unit length
         for (int i = 0; i < transformed_eigens.cols(); i++)
@@ -112,10 +131,68 @@ int main()
             transformed_eigens.col(i) = transformed_eigens.col(i) / transformed_eigens.col(i).norm();
         }
 
+        write_eigen_matrix_to_file(transformed_eigens, "transformed_eigens.mat", "transformed_eigens");
+
+
         //trying it on image1
         //1 x num_samples
-        //todo: original or centered
         Eigen::MatrixXd y = centered_data.col(0).transpose() * transformed_eigens;
+        cout << "y dims" << y.rows() << " " << y.cols() << endl;
+
+        cout << y << endl;
+
+        Eigen::VectorXd x_hat = Eigen::VectorXd::Zero(num_features);
+        for (int k = 0; k < 1000; k++)
+        {
+            x_hat += y(0, k) * transformed_eigens.col(k);
+        }
+
+        view_vector_as_image(x_hat + x_bar, num_rows, num_cols);
+    }
+    //testing on eigens already computed
+    if (C)
+    {
+        Eigen::MatrixXd transformed_eigens = read_matrix_into_eigen("transformed_eigens.mat", "transformed_eigens");
+
+        auto file_name_list = get_filenames("Faces_FA_FB/fa_H");
+        cv::Mat first_sample = cv::imread("Faces_FA_FB/fa_H/00001_930831_fa_a.pgm", cv::IMREAD_GRAYSCALE);
+        int num_rows = first_sample.rows;
+        int num_cols = first_sample.cols;
+        int num_features = num_rows * num_cols;
+        int num_samples = file_name_list.size();
+        // Reads in all hd faces and stores them unflattened in a vector
+        //num_features x num_samples (NxM) matrix
+        Eigen::MatrixXd original_data = Eigen::MatrixXd(num_features, num_samples);
+        for (int i = 0; i < num_samples; i++)
+        {
+            string name = file_name_list[i];
+            cv::Mat im = imread(name,cv::IMREAD_GRAYSCALE);
+            Eigen::MatrixXd mat;
+            cv::cv2eigen(im, mat);
+            original_data.col(i) = mat.reshaped();
+        }
+        cout << "Original Data matrix: " << original_data.rows() << " " << original_data.cols() << endl;
+//        view_vector_as_image(original_data.col(0), num_rows, num_cols);
+
+        //Sample Mean
+        //step 1
+        Eigen::VectorXd sample_mean;
+        Eigen::VectorXd x_bar = Eigen::VectorXd::Zero(num_features);
+        for (int i = 0; i < num_samples; i++)
+        {
+            x_bar += original_data.col(i);
+        }
+        x_bar /= num_samples;
+//        view_vector_as_image(x_bar, num_rows, num_cols);
+
+        //step 2
+        Eigen::MatrixXd centered_data = Eigen::MatrixXd(num_features, num_samples);
+        for (int i = 0; i < num_samples; i++)
+        {
+            centered_data.col(i) = original_data.col(i) - x_bar;
+        }
+
+        Eigen::MatrixXd y = centered_data.col(1).transpose() * transformed_eigens;
         cout << "y dims" << y.rows() << " " << y.cols() << endl;
 
         cout << y << endl;
