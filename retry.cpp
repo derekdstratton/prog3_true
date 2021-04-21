@@ -53,7 +53,7 @@ std::vector<std::string> get_filenames(filesystem::path path)
 
 int main()
 {
-    bool A = 0, B = 1, C = 0, D = 0, E = 0;
+    bool A = 0, B = 0, C = 1, D = 0, E = 0;
     //Debug/Test Block
     if (A)
     {

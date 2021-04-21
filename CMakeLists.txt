@@ -3,7 +3,7 @@ project(prog3)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(eigen-3.3.9)
+include_directories(eigen-3.4-rc1)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/opencv/build/x64/vc15/lib)
 
