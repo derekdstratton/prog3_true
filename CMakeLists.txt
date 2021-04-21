@@ -25,5 +25,11 @@ target_link_libraries( prog3_exp ${OpenCV_LIBS} )
 
 target_link_libraries( prog3_exp ${CMAKE_CURRENT_SOURCE_DIR}/opencv/build/x64/vc15/lib/opencv_world452d.lib)
 
+add_executable(pls retry.cpp)
+target_link_libraries( pls ${OpenCV_LIBS} )
+
+target_link_libraries( pls ${CMAKE_CURRENT_SOURCE_DIR}/opencv/build/x64/vc15/lib/opencv_world452d.lib)
+
+
 message("libs")
 message(${OpenCV_LIBS})
