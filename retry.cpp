@@ -74,7 +74,7 @@ std::vector<std::string> get_filenames(filesystem::path path)
 
 int main()
 {
-    bool A = 0, B = 0, C = 0, D = 0, E = 0, F = 1;
+    bool A = 0, B = 0, C = 0, D = 1, E = 1, F = 1;
     //Debug/Test Block
     if (A)
     {
@@ -160,6 +160,7 @@ int main()
             Eigen::VectorXd col = transformed_eigens.col(i);
             Eigen::VectorXd y = (col - f_min *Eigen::VectorXd::Ones(col.size())) / (f_max - f_min);
             view_vector_as_image(y, num_rows, num_cols);
+            save_vector_as_image(y, num_rows, num_cols, "eigenface" + to_string(i) + ".pgm");
         }
 
 
@@ -252,7 +253,7 @@ int main()
 
         view_vector_as_image(x_hat + x_bar, num_rows, num_cols);
     }
-    //experiment A
+    //experiment A.II
     if (D)
     {
         Eigen::VectorXd eigenvalues = read_matrix_into_eigen("eigenvalues.mat", "eigenvalues");
@@ -290,12 +291,12 @@ int main()
         int num_rows = first_sample.rows;
         int num_cols = first_sample.cols;
         int num_features = num_rows * num_cols;
-        int num_samples = file_name_list.size();
+        int training_samples = file_name_list.size();
         // Reads in all hd faces and stores them unflattened in a vector
-        //num_features x num_samples (NxM) matrix
-        Eigen::MatrixXd original_data = Eigen::MatrixXd(num_features, num_samples);
-        Eigen::VectorXd identities = Eigen::VectorXd(num_samples);
-        for (int i = 0; i < num_samples; i++)
+        //num_features x training_samples (NxM) matrix
+        Eigen::MatrixXd original_data = Eigen::MatrixXd(num_features, training_samples);
+        Eigen::VectorXd identities = Eigen::VectorXd(training_samples);
+        for (int i = 0; i < training_samples; i++)
         {
             string name = file_name_list[i];
             cv::Mat im = imread(name,cv::IMREAD_GRAYSCALE);
@@ -313,11 +314,11 @@ int main()
         //Sample Mean
         //step 1
         Eigen::VectorXd x_bar = Eigen::VectorXd::Zero(num_features);
-        for (int i = 0; i < num_samples; i++)
+        for (int i = 0; i < training_samples; i++)
         {
             x_bar += original_data.col(i);
         }
-        x_bar /= num_samples;
+        x_bar /= training_samples;
 
         //View average face
 //        view_vector_as_image(x_bar, num_rows, num_cols);
@@ -326,8 +327,8 @@ int main()
         Eigen::MatrixXd transformed_eigens = read_matrix_into_eigen("transformed_eigens.mat", "transformed_eigens");
 
         //step 2
-        Eigen::MatrixXd centered_data = Eigen::MatrixXd(num_features, num_samples);
-        for (int i = 0; i < num_samples; i++)
+        Eigen::MatrixXd centered_data = Eigen::MatrixXd(num_features, training_samples);
+        for (int i = 0; i < training_samples; i++)
         {
             centered_data.col(i) = original_data.col(i) - x_bar;
         }
@@ -382,11 +383,13 @@ int main()
         cout << "Projected test data: " << test_data_projected.rows() << " " << test_data_projected.cols() << endl;
 
         //matrix of all mahalanobis dists
-        Eigen::MatrixXd training_test_difs(num_samples, test_samples);
+        //columns are test, rows are training
+        Eigen::MatrixXd training_test_difs(training_samples, test_samples);
+
         int did_good = 0;
         for (int i = 0; i < test_samples; i++)
         {
-            for (int j = 0; j < num_samples; j++)
+            for (int j = 0; j < training_samples; j++)
             {
                 training_test_difs(j, i) = mahalanobis(training_data_projected.row(j),
                                                        test_data_projected.row(i),
