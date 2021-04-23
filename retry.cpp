@@ -6,12 +6,25 @@
 
 using namespace std;
 
+//todo: write: save_vector_as_image
+//write: load_images_from_path and load_identities
+
+double mahalanobis(Eigen::VectorXd y1, Eigen::VectorXd y2, Eigen::VectorXd lambda)
+{
+    double sum = 0;
+    for (int i = 0; i < y1.size(); i++)
+    {
+        sum += (1/lambda(i)) * pow(y1(i) -y2(i),2);
+    }
+    return sum;
+}
+
 void view_vector_as_image(Eigen::VectorXd image_vec, int rows, int cols)
 {
     Eigen::MatrixXd mat2 = image_vec.reshaped(rows, cols);
     cv::Mat image2;
     cv::eigen2cv(mat2, image2);
-    image2.convertTo(image2, CV_32FC1, 1.f/255);
+//    image2.convertTo(image2, CV_32FC1, 1.f/255);
     cv::imshow("pls", image2);
     cv::waitKey(0);
 }
@@ -53,7 +66,7 @@ std::vector<std::string> get_filenames(filesystem::path path)
 
 int main()
 {
-    bool A = 0, B = 0, C = 1, D = 0, E = 0;
+    bool A = 0, B = 0, C = 0, D = 1, E = 0;
     //Debug/Test Block
     if (A)
     {
@@ -83,10 +96,11 @@ int main()
             cv::Mat im = imread(name,cv::IMREAD_GRAYSCALE);
             Eigen::MatrixXd mat;
             cv::cv2eigen(im, mat);
+            mat /= 255.;
             original_data.col(i) = mat.reshaped();
         }
         cout << "Original Data matrix: " << original_data.rows() << " " << original_data.cols() << endl;
-//        view_vector_as_image(original_data.col(0), num_rows, num_cols);
+        view_vector_as_image(original_data.col(0), num_rows, num_cols);
 
         //Sample Mean
         //step 1
@@ -96,7 +110,7 @@ int main()
             x_bar += original_data.col(i);
         }
         x_bar /= num_samples;
-//        view_vector_as_image(x_bar, num_rows, num_cols);
+        view_vector_as_image(x_bar, num_rows, num_cols);
 
         //step 2
         Eigen::MatrixXd centered_data = Eigen::MatrixXd(num_features, num_samples);
@@ -118,20 +132,35 @@ int main()
         //4b
         Eigen::MatrixXd reversed_eigenvectors = s.eigenvectors().rowwise().reverse();
 
-        cout << "Checkpoint" << endl;
+        write_eigen_matrix_to_file(s.eigenvalues().reverse(), "eigenvalues.mat", "eigenvalues");
+
+        cout << "Checkpoint!" << endl;
 
         //num_features x num_samples
         //this multiplication also takes a hot minute
         Eigen::MatrixXd transformed_eigens = centered_data * reversed_eigenvectors;
         cout << "transformed eigenfaces dims" << transformed_eigens.rows() << " " << transformed_eigens.cols() << endl;
         //normalize to unit length
+
+        //View top 10 eigenfaces
+        //try outputting them BEFORE normalization
+        //slide 30
+        for (int i = 0; i < 10; i++)
+        {
+            double f_min = transformed_eigens.col(i).minCoeff();
+            double f_max = transformed_eigens.col(i).maxCoeff();
+            Eigen::VectorXd col = transformed_eigens.col(i);
+            Eigen::VectorXd y = (col - f_min *Eigen::VectorXd::Ones(col.size())) / (f_max - f_min);
+            view_vector_as_image(y, num_rows, num_cols);
+        }
+
+
         for (int i = 0; i < transformed_eigens.cols(); i++)
         {
             transformed_eigens.col(i) = transformed_eigens.col(i) / transformed_eigens.col(i).norm();
         }
 
         write_eigen_matrix_to_file(transformed_eigens, "transformed_eigens.mat", "transformed_eigens");
-
 
         //trying it on image1
         //1 x num_samples
@@ -175,7 +204,6 @@ int main()
 
         //Sample Mean
         //step 1
-        Eigen::VectorXd sample_mean;
         Eigen::VectorXd x_bar = Eigen::VectorXd::Zero(num_features);
         for (int i = 0; i < num_samples; i++)
         {
@@ -216,8 +244,110 @@ int main()
 
         view_vector_as_image(x_hat + x_bar, num_rows, num_cols);
     }
+    //experiment A
     if (D)
     {
+        Eigen::VectorXd eigenvalues = read_matrix_into_eigen("eigenvalues.mat", "eigenvalues");
+//        cout << eigenvalues << endl;
+        cout << eigenvalues.sum() << endl;
+//        cout << eigenvalues(0) / eigenvalues.sum() << endl;
+        //variance explained
+        Eigen::VectorXd varExp = eigenvalues / eigenvalues.sum();
+        cout << varExp(0) << endl;
+        cout << varExp(1) << endl;
+        //cumulative variance explained
+        Eigen::VectorXd cumVar(varExp.size());
+        double val = 0;
+        for (int i = 0; i < varExp.size(); i++)
+        {
+            val += varExp(i);
+            cumVar(i) = val;
+        }
+        cout << cumVar(varExp.size() - 2) << endl;
+        cout << cumVar(varExp.size() - 1) << endl;
+
+        int num_cmp_needed = -1;
+        for (int i = 0; i < cumVar.size(); i++)
+        {
+            if (cumVar(i) > 0.8)
+            {
+                num_cmp_needed = i + 1;
+                break;
+            }
+        }
+        cout << "To explain 0.8, we need " << num_cmp_needed << " of " << cumVar.size() << " components.";
+
+        auto file_name_list = get_filenames("Faces_FA_FB/fa_H");
+        cv::Mat first_sample = cv::imread("Faces_FA_FB/fa_H/00001_930831_fa_a.pgm", cv::IMREAD_GRAYSCALE);
+        int num_rows = first_sample.rows;
+        int num_cols = first_sample.cols;
+        int num_features = num_rows * num_cols;
+        int num_samples = file_name_list.size();
+        // Reads in all hd faces and stores them unflattened in a vector
+        //num_features x num_samples (NxM) matrix
+        Eigen::MatrixXd original_data = Eigen::MatrixXd(num_features, num_samples);
+        Eigen::VectorXd identities = Eigen::VectorXd(num_samples);
+        for (int i = 0; i < num_samples; i++)
+        {
+            string name = file_name_list[i];
+            cv::Mat im = imread(name,cv::IMREAD_GRAYSCALE);
+            Eigen::MatrixXd mat;
+            cv::cv2eigen(im, mat);
+            mat /= 255.;
+            original_data.col(i) = mat.reshaped();
+//            cout << filesystem::path(name).filename().generic_string().substr(0,5) << endl;
+            identities(i) = stoi(filesystem::path(name).filename().generic_string().substr(0,5));
+        }
+        cout << "Original Data matrix: " << original_data.rows() << " " << original_data.cols() << endl;
+//        view_vector_as_image(original_data.col(0), num_rows, num_cols);
+
+        //Sample Mean
+        //step 1
+        Eigen::VectorXd x_bar = Eigen::VectorXd::Zero(num_features);
+        for (int i = 0; i < num_samples; i++)
+        {
+            x_bar += original_data.col(i);
+        }
+        x_bar /= num_samples;
+
+        //View average face
+//        view_vector_as_image(x_bar, num_rows, num_cols);
+
+
+        Eigen::MatrixXd transformed_eigens = read_matrix_into_eigen("transformed_eigens.mat", "transformed_eigens");
+
+        //step 2
+        Eigen::MatrixXd centered_data = Eigen::MatrixXd(num_features, num_samples);
+        for (int i = 0; i < num_samples; i++)
+        {
+            centered_data.col(i) = original_data.col(i) - x_bar;
+        }
+
+        //project data onto the top k eigenvectors
+        Eigen::MatrixXd top_k_eigens = transformed_eigens(Eigen::all, Eigen::seq(0, num_cmp_needed-1));
+        cout << "TOP K SIZE" << top_k_eigens.rows() << " " << top_k_eigens.cols() << endl;
+
+        Eigen::MatrixXd training_data_projected = centered_data.transpose() * top_k_eigens;
+        cout << "Projected " << training_data_projected.rows() << " " << training_data_projected.cols() << endl;
+
+        Eigen::VectorXd top_k_eigenvals = eigenvalues(Eigen::seq(0, num_cmp_needed-1));
+
+        double dist = mahalanobis(training_data_projected.row(0),
+                                  training_data_projected.row(0),
+                                  top_k_eigenvals);
+        cout << "DIST: (to self)" << dist << endl;
+        double dist2 = mahalanobis(training_data_projected.row(0),
+                                   training_data_projected.row(2),
+                                   top_k_eigenvals);
+        cout << "DIST2: (diff pics)" << dist2 << endl;
+        cout << "IDENTITIES: " << identities(0) << ", " << identities(2) << endl;
+        double dist3 = mahalanobis(training_data_projected.row(2),
+                                   training_data_projected.row(3),
+                                   top_k_eigenvals);
+        cout << "DIST3: (same identity)" << dist3 << endl;
+        cout << "IDENTITIES: " << identities(2) << ", " << identities(3) << endl;
+
+        //Recognition: load in test imgs
 
     }
 
